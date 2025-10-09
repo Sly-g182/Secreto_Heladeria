@@ -3,6 +3,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import F 
 from django.contrib.auth.models import User 
+from django.core.exceptions import ValidationError # 🚨 ¡NUEVA IMPORTACIÓN NECESARIA! 🚨
 
 # ========================================================================
 # MODELOS BASE (Categoría, Producto, Promoción)
@@ -26,6 +27,15 @@ class Producto(models.Model):
 
     def __str__(self):
         return self.nombre
+    
+    # 🚨 VALIDACIÓN: STOCK NO NEGATIVO 🚨
+    def clean(self):
+        """Asegura que el stock no sea un valor negativo."""
+        if self.stock < 0:
+            raise ValidationError({'stock': "El stock de un producto no puede ser un valor negativo."})
+        
+        # Llama a la implementación base para otras posibles validaciones
+        super().clean()
 
     @property
     def esta_por_vencer(self):
@@ -65,6 +75,16 @@ class Promocion(models.Model):
 
     def __str__(self):
         return self.nombre
+    
+    # 🚨 VALIDACIÓN: RANGO DE FECHAS 🚨
+    def clean(self):
+        """Asegura que la fecha de inicio no sea posterior a la fecha de fin."""
+        if self.fecha_inicio and self.fecha_fin and self.fecha_inicio > self.fecha_fin:
+            raise ValidationError({
+                'fecha_inicio': "La fecha de inicio no puede ser posterior a la fecha de fin de la promoción."
+            })
+        super().clean()
+
 
     @property
     def es_vigente(self):

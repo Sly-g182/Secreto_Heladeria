@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.db import transaction
 # Importaciones necesarias para cálculos
@@ -13,12 +13,29 @@ from .models import Cliente, Producto, Promocion, Venta, DetalleVenta
 from .forms import ClienteUserCreationForm, PromocionForm 
 
 
-# ------------------------------------------------------------------------
+# ========================================================================
+# FUNCIONES DE AYUDA PARA ROLES
+# ========================================================================
+
+# Permite el acceso a usuarios que sean staff (superusers y admins de marketing)
+def is_staff_user(user):
+    """Retorna True si el usuario es staff (Admin Marketing incluido)."""
+    return user.is_staff
+
+# Permite el acceso SÓLO a usuarios que NO sean staff (clientes normales)
+def is_cliente_user(user):
+    """Retorna True si el usuario está autenticado y NO es staff."""
+    return user.is_authenticated and not user.is_staff
+
+# ========================================================================
 # VISTAS DE AUTENTICACIÓN Y DASHBOARD PRINCIPAL
-# ------------------------------------------------------------------------
+# ========================================================================
 
 def inicio(request):
-    """Renderiza la página de inicio de Secreto Heladería."""
+    """Renderiza la página de inicio de Secreto Heladería y redirige a staff al dashboard."""
+    if request.user.is_authenticated and request.user.is_staff:
+        return redirect('marketing_dashboard')
+    
     return render(request, 'gestion/inicio.html')
 
 
@@ -38,6 +55,7 @@ def register(request):
 
 
 @login_required
+@user_passes_test(is_staff_user, login_url='/') # 🔒 ACCESO SOLO A STAFF
 def reporte_clientes(request):
     """Vista de reporte de todos los clientes (acceso para administración o marketing)."""
     
@@ -45,15 +63,10 @@ def reporte_clientes(request):
         Cliente.objects
         .select_related('user')
         .annotate(
-            # Total de órdenes: cuenta los IDs de venta distintos a través de la relación 'ventas'
             total_ordenes=Count('ventas__id', distinct=True),
-            # Monto total gastado: suma el campo 'total' de todas las ventas a través de la relación 'ventas'
             monto_total_gastado=Sum('ventas__total'),
-            # Última compra: encuentra la fecha_venta máxima a través de la relación 'ventas'
             ultima_compra=Max('ventas__fecha_venta')
         )
-        # ELIMINADO: La línea .filter(total_ordenes__gt=0) se eliminó para mostrar
-        # a TODOS los clientes, incluidos los recién registrados sin pedidos.
         .order_by('-monto_total_gastado')
     )
     
@@ -62,7 +75,7 @@ def reporte_clientes(request):
 
 
 # ------------------------------------------------------------------------
-# VISTAS DE CLIENTE (TIENDA)
+# VISTAS DE CLIENTE (TIENDA Y CARRITO)
 # ------------------------------------------------------------------------
 def producto_listado(request):
     """Muestra todos los productos en stock, agrupados por categoría y con promociones activas."""
@@ -110,6 +123,7 @@ def producto_listado(request):
 
 
 @login_required
+@user_passes_test(is_cliente_user, login_url='/admin/') # 🔒 SOLO CLIENTE: Bloquea Admin Marketing
 def agregar_a_carrito(request, producto_id):
     """Agrega productos al carrito almacenado en sesión."""
     if request.method == 'POST':
@@ -127,13 +141,13 @@ def agregar_a_carrito(request, producto_id):
 
         if producto_id_str in carrito:
             nueva_cantidad = carrito[producto_id_str]['cantidad'] + cantidad
-            carrito[producto_id_str]['cantidad'] = min(nueva_cantidad, producto.stock)
+            carrito[producto_id_str]['cantidad'] = nueva_cantidad
         else:
             carrito[producto_id_str] = {
                 'id': producto.id,
                 'nombre': producto.nombre,
                 'precio': str(producto.precio),
-                'cantidad': min(cantidad, producto.stock),
+                'cantidad': cantidad,
             }
 
         request.session['carrito'] = carrito
@@ -144,6 +158,7 @@ def agregar_a_carrito(request, producto_id):
 
 
 @login_required
+@user_passes_test(is_cliente_user, login_url='/admin/') # 🔒 SOLO CLIENTE: Bloquea Admin Marketing
 def ver_carrito(request):
     """Muestra el contenido actual del carrito."""
     carrito = request.session.get('carrito', {})
@@ -181,6 +196,7 @@ def ver_carrito(request):
 
 
 @login_required
+@user_passes_test(is_cliente_user, login_url='/admin/') # 🔒 SOLO CLIENTE: Bloquea Admin Marketing
 def quitar_de_carrito(request, producto_id):
     """Quita un producto del carrito."""
     carrito = request.session.get('carrito', {})
@@ -197,6 +213,7 @@ def quitar_de_carrito(request, producto_id):
 
 
 @login_required
+@user_passes_test(is_cliente_user, login_url='/admin/') # 🔒 SOLO CLIENTE: Bloquea Admin Marketing
 def finalizar_orden(request):
     """Crea una venta y sus detalles a partir del carrito."""
     carrito = request.session.get('carrito', {})
@@ -219,6 +236,7 @@ def finalizar_orden(request):
                 cantidad = item['cantidad']
                 precio_unitario_base = producto.precio
 
+                # Re-validación CRÍTICA del stock antes de crear el DetalleVenta
                 if producto.stock < cantidad:
                     raise Exception(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
 
@@ -248,11 +266,12 @@ def finalizar_orden(request):
                     subtotal=subtotal
                 )
                 
-                # Actualizar stock (IMPORTANTE)
+                # Actualizar stock (IMPORTANTE):
                 producto.stock -= cantidad
                 producto.save()
 
 
+            # Fuera del loop, actualizamos la venta y borramos el carrito
             venta.total = total_venta
             venta.save()
 
@@ -271,6 +290,7 @@ def finalizar_orden(request):
 
 
 @login_required
+@user_passes_test(is_cliente_user, login_url='/admin/') # 🔒 SOLO CLIENTE: Bloquea Admin Marketing
 def historial_pedidos(request):
     """Muestra el historial de compras del cliente."""
     try:
@@ -291,6 +311,7 @@ def historial_pedidos(request):
 # ------------------------------------------------------------------------
 
 @login_required
+@user_passes_test(is_staff_user, login_url='/') # 🔒 ACCESO SOLO A STAFF: Permite Admin Marketing
 def marketing_dashboard(request):
     """Vista para el administrador de marketing, ahora incluye analíticas y todas las promociones."""
     hoy = date.today()
@@ -299,7 +320,8 @@ def marketing_dashboard(request):
     # 1. Resumen general
     resumen = {
         'total_clientes': Cliente.objects.count(),
-        'total_ventas': Venta.objects.count(),
+        # El Admin Marketing ve el total general de ventas, no el detalle transaccional.
+        'total_ventas': Venta.objects.count(), 
         'total_productos': Producto.objects.count(),
         'promociones_activas': Promocion.objects.filter(fecha_fin__gte=hoy).count(),
         'ventas_total_monto': Venta.objects.aggregate(total=Sum('total'))['total'] or 0,
@@ -308,7 +330,7 @@ def marketing_dashboard(request):
     # 2. Últimas compras (para historial)
     ultimas_ventas = (
         Venta.objects
-        .select_related('cliente__user') # Accedemos al usuario a través del cliente
+        .select_related('cliente__user')
         .prefetch_related('detalles__producto')
         .order_by('-fecha_venta')[:5]
     )
@@ -316,16 +338,16 @@ def marketing_dashboard(request):
     # 3. Productos más vendidos (Top 5)
     productos_mas_vendidos = (
         DetalleVenta.objects
-        .values('producto__nombre') # Agrupar por nombre de producto
-        .annotate(total_vendido=Sum('cantidad')) # Sumar la cantidad vendida
+        .values('producto__nombre')
+        .annotate(total_vendido=Sum('cantidad'))
         .order_by('-total_vendido')[:5]
     )
 
     # 4. Productos por vencer (en los próximos 30 días)
     productos_por_vencer = Producto.objects.filter(
         fecha_vencimiento__lte=fecha_limite_vencimiento,
-        fecha_vencimiento__gte=hoy, # Solo los que vencen a partir de hoy
-        stock__gt=0 # Solo si tienen stock
+        fecha_vencimiento__gte=hoy,
+        stock__gt=0
     ).order_by('fecha_vencimiento')
 
     # 5. TODAS las promociones (para listado y edición)
@@ -336,13 +358,14 @@ def marketing_dashboard(request):
         'ultimas_ventas': ultimas_ventas,
         'productos_mas_vendidos': productos_mas_vendidos,
         'productos_por_vencer': productos_por_vencer,
-        'todas_promociones': todas_promociones, # Se añade el listado completo
+        'todas_promociones': todas_promociones,
     }
 
     return render(request, 'gestion/marketing_dashboard.html', context)
 
 
 @login_required
+@user_passes_test(is_staff_user, login_url='/') # 🔒 ACCESO SOLO A STAFF: Permite Admin Marketing
 def crear_promocion(request):
     """Permite al administrador de marketing crear nuevas promociones usando el PromocionForm."""
     
@@ -365,12 +388,14 @@ def crear_promocion(request):
 
 
 @login_required
+@user_passes_test(is_staff_user, login_url='/') # 🔒 ACCESO SOLO A STAFF: Permite Admin Marketing
 def editar_promocion(request, pk):
     """Permite al administrador de marketing editar una promoción existente."""
     promocion = get_object_or_404(Promocion, pk=pk)
 
     if request.method == 'POST':
         form = PromocionForm(request.POST, instance=promocion)
+        
         if form.is_valid():
             form.save()
             messages.success(request, f"Promoción '{promocion.nombre}' actualizada exitosamente.")
