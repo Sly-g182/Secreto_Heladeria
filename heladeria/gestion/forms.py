@@ -9,6 +9,8 @@ from .models import Cliente, Promocion, Producto
 # FORMULARIO DE REGISTRO
 # -----------------------------------------------
 class ClienteUserCreationForm(UserCreationForm):
+# ... (rest of the class remains the same)
+
     # Campos de perfil que se mapearán al modelo Cliente
     rut = forms.CharField(max_length=15, required=False, label="RUT/Identificación")
     telefono = forms.CharField(max_length=20, required=False, label="Teléfono")
@@ -54,6 +56,7 @@ class ClienteUserCreationForm(UserCreationForm):
 # FORMULARIO DE CREACIÓN DE PROMOCIONES (Marketing)
 # -----------------------------------------------
 class PromocionForm(forms.ModelForm):
+# ... (rest of the class remains the same)
     """Formulario para crear y editar promociones."""
     
     productos = forms.ModelMultipleChoiceField(
@@ -95,6 +98,7 @@ class PromocionForm(forms.ModelForm):
 # FORMULARIO PARA AÑADIR AL CARRITO (Tienda)
 # -----------------------------------------------
 class AgregarAlCarritoForm(forms.Form):
+# ... (rest of the class remains the same)
     """
     Formulario simple para añadir un producto al carrito.
     """

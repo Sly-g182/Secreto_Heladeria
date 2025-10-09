@@ -4,53 +4,73 @@
 
 {% block content %}
 <div class="container my-5">
-    <h1 class="text-center mb-4">Listado de Clientes</h1>
+    <h1 class="text-center mb-4 text-secondary">Listado de Clientes</h1>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>RUT</th>
-                    <th>Teléfono</th>
-                    <th>Correo</th>
-                    <th>Dirección</th>
-                    <th>Fecha Registro</th>
-                    <th>Última Compra</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for cliente in clientes %}
-                <tr>
-                    <td>{{ cliente.id }}</td>
-                    <td>{{ cliente.nombre }}</td>
-                    <td>{{ cliente.rut|default:"N/A" }}</td> 
-                    <td>{{ cliente.telefono|default:"N/A" }}</td>
-                    <td>{{ cliente.correo }}</td>
-                    <td>{{ cliente.direccion|default:"N/A" }}</td>
-                    
-                    {# 🚨 AJUSTE: Muestra fecha Y hora del registro (date_joined es DateTime) #}
-                    <td>{{ cliente.fecha_registro|default:"N/A"|date:"d/m/Y H:i" }}</td> 
-                    
-                    {# 🚨 AJUSTE: Muestra fecha Y hora de la última compra (fecha_venta es DateTime) #}
-                    <td>
-                        {% if cliente.ultima_compra %}
-                            {{ cliente.ultima_compra|date:"d/m/Y H:i" }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="8" class="text-center text-muted">
-                        No se encontraron clientes registrados.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    {% if not user.is_staff %}
+        <div class="alert alert-danger text-center">
+            Acceso Denegado. Esta página es solo para personal de administración (Staff).
+        </div>
+    {% else %}
+
+        <div class="table-responsive shadow-lg rounded">
+            <!-- Usamos 'datos_clientes' que es la variable enviada desde views.py -->
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Nombre (Username)</th>
+                        <th>Correo</th>
+                        <th>RUT</th>
+                        <th>Teléfono</th>
+                        <th>Dirección</th>
+                        <th>Fecha Registro</th>
+                        <th>Última Compra</th>
+                        <th class="text-center">Órdenes</th>
+                        <th class="text-end">Monto Gastado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Iteramos sobre 'datos_clientes' y usamos 'cliente' como nombre de variable #}
+                    {% for cliente in datos_clientes %}
+                    <tr>
+                        <td>{{ cliente.id }}</td>
+                        {# Usamos cliente.user.username y cliente.user.email para acceder a los campos del modelo User #}
+                        <td class="fw-bold text-primary">{{ cliente.user.username }}</td>
+                        <td>{{ cliente.user.email }}</td>
+                        
+                        {# Estos campos se leen directamente del modelo Cliente #}
+                        <td>{{ cliente.rut|default:"N/A" }}</td> 
+                        <td>{{ cliente.telefono|default:"N/A" }}</td>
+                        <td>{{ cliente.direccion|default:"N/A" }}</td>
+                        
+                        {# Usamos cliente.user.date_joined si tu modelo Cliente no tiene fecha_registro #}
+                        <td>{{ cliente.user.date_joined|date:"d/m/Y H:i" }}</td> 
+                        
+                        {# Campos calculados (anotados) #}
+                        <td>
+                            {% if cliente.ultima_compra %}
+                                {{ cliente.ultima_compra|date:"d/m/Y H:i" }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-info text-dark">{{ cliente.total_ordenes|default:0 }}</span>
+                        </td>
+                        <td class="text-end fw-bold">
+                            ${{ cliente.monto_total_gastado|default:"0.00"|floatformat:0 }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted">
+                            No se encontraron clientes registrados.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 </div>
 {% endblock content %}

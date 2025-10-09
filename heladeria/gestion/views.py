@@ -1,15 +1,16 @@
-# heladeria/gestion/views.py
-
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from datetime import date
+# Importaciones necesarias para cálculos
+from django.db.models import Sum, F, Max, Count
+from datetime import date, timedelta 
+
 
 # Modelos y formularios
 from .models import Cliente, Producto, Promocion, Venta, DetalleVenta
-from .forms import ClienteUserCreationForm
+from .forms import ClienteUserCreationForm, PromocionForm 
 
 
 # ------------------------------------------------------------------------
@@ -39,14 +40,30 @@ def register(request):
 @login_required
 def reporte_clientes(request):
     """Vista de reporte de todos los clientes (acceso para administración o marketing)."""
-    clientes = Cliente.objects.all()
-    return render(request, 'gestion/reporte_clientes.html', {'clientes': clientes})
+    
+    datos_clientes = (
+        Cliente.objects
+        .select_related('user')
+        .annotate(
+            # Total de órdenes: cuenta los IDs de venta distintos a través de la relación 'ventas'
+            total_ordenes=Count('ventas__id', distinct=True),
+            # Monto total gastado: suma el campo 'total' de todas las ventas a través de la relación 'ventas'
+            monto_total_gastado=Sum('ventas__total'),
+            # Última compra: encuentra la fecha_venta máxima a través de la relación 'ventas'
+            ultima_compra=Max('ventas__fecha_venta')
+        )
+        # ELIMINADO: La línea .filter(total_ordenes__gt=0) se eliminó para mostrar
+        # a TODOS los clientes, incluidos los recién registrados sin pedidos.
+        .order_by('-monto_total_gastado')
+    )
+    
+    context = {'datos_clientes': datos_clientes}
+    return render(request, 'gestion/reporte_clientes.html', context)
 
 
 # ------------------------------------------------------------------------
 # VISTAS DE CLIENTE (TIENDA)
 # ------------------------------------------------------------------------
-
 def producto_listado(request):
     """Muestra todos los productos en stock, agrupados por categoría y con promociones activas."""
     hoy = date.today()
@@ -59,14 +76,23 @@ def producto_listado(request):
     
     promociones_por_producto = {}
     for promo in promociones_activas:
-        for producto in promo.productos.all():
-            if producto.id in [p.id for p in productos_en_stock]:
-                if producto.id not in promociones_por_producto:
-                    promociones_por_producto[producto.id] = []
-                promociones_por_producto[producto.id].append({
-                    'nombre': promo.nombre,
-                    'descuento': promo.descuento
-                })
+        productos_aplicables = promo.productos.all()
+        
+        if not productos_aplicables:
+            productos_a_iterar = productos_en_stock
+        else:
+            # Filtramos productos en stock que están específicamente en esta promoción
+            productos_a_iterar = productos_en_stock.filter(id__in=[p.id for p in productos_aplicables])
+
+        for producto in productos_a_iterar:
+            if producto.id not in promociones_por_producto:
+                promociones_por_producto[producto.id] = []
+            
+            promociones_por_producto[producto.id].append({
+                'nombre': promo.nombre,
+                'descuento': promo.valor_descuento, 
+                'tipo': promo.tipo
+            })
 
     categorias = {}
     for producto in productos_en_stock:
@@ -139,6 +165,7 @@ def ver_carrito(request):
             })
             total_general += subtotal
         except Producto.DoesNotExist:
+            # Si el producto ya no existe en la base de datos, lo quitamos del carrito
             del carrito[id_str]
             request.session.modified = True
 
@@ -180,7 +207,8 @@ def finalizar_orden(request):
 
     try:
         with transaction.atomic():
-            cliente = get_object_or_404(Cliente, correo=request.user.email)
+            # Asumo que el modelo Cliente se relaciona con User. 
+            cliente = get_object_or_404(Cliente, user=request.user) 
 
             venta = Venta.objects.create(cliente=cliente)
             total_venta = 0
@@ -194,16 +222,20 @@ def finalizar_orden(request):
                 if producto.stock < cantidad:
                     raise Exception(f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}")
 
+                # Lógica para aplicar la mejor promoción (solo aplica descuento si es PORCENTAJE)
                 promociones = Promocion.objects.filter(
                     productos=producto,
                     fecha_inicio__lte=hoy,
-                    fecha_fin__gte=hoy
+                    fecha_fin__gte=hoy,
+                    tipo='PORCENTAJE' 
                 )
 
                 precio_a_usar = precio_unitario_base
+                
                 if promociones.exists():
-                    max_descuento = max(p.descuento for p in promociones)
-                    precio_a_usar = precio_unitario_base * (1 - (max_descuento / 100))
+                    # Encuentra el máximo descuento porcentual
+                    max_descuento_porcentaje = max(p.valor_descuento for p in promociones) 
+                    precio_a_usar = precio_unitario_base * (1 - (max_descuento_porcentaje / 100))
 
                 subtotal = precio_a_usar * cantidad
                 total_venta += subtotal
@@ -215,6 +247,11 @@ def finalizar_orden(request):
                     precio_unitario=precio_a_usar,
                     subtotal=subtotal
                 )
+                
+                # Actualizar stock (IMPORTANTE)
+                producto.stock -= cantidad
+                producto.save()
+
 
             venta.total = total_venta
             venta.save()
@@ -225,6 +262,9 @@ def finalizar_orden(request):
             messages.success(request, f"¡Tu pedido #{venta.id} ha sido completado con éxito! Revisa tu historial.")
             return redirect('historial_pedidos')
 
+    except Cliente.DoesNotExist:
+        messages.error(request, "No se encontró tu perfil de cliente. Asegúrate de que tu perfil exista.")
+        return redirect('producto_listado')
     except Exception as e:
         messages.error(request, f"Error al procesar el pedido: {str(e)}. No se ha cobrado nada.")
         return redirect('ver_carrito')
@@ -234,7 +274,8 @@ def finalizar_orden(request):
 def historial_pedidos(request):
     """Muestra el historial de compras del cliente."""
     try:
-        cliente = get_object_or_404(Cliente, correo=request.user.email)
+        cliente = get_object_or_404(Cliente, user=request.user)
+        # prefetch_related es crucial para evitar múltiples consultas a la base de datos
         pedidos = Venta.objects.filter(cliente=cliente).prefetch_related('detalles__producto').order_by('-fecha_venta')
 
         context = {'pedidos': pedidos}
@@ -246,73 +287,107 @@ def historial_pedidos(request):
 
 
 # ------------------------------------------------------------------------
-# DASHBOARD DE MARKETING
+# DASHBOARD DE MARKETING Y VISTAS DE PROMOCIÓN
 # ------------------------------------------------------------------------
 
 @login_required
 def marketing_dashboard(request):
-    """Vista para el administrador de marketing."""
+    """Vista para el administrador de marketing, ahora incluye analíticas y todas las promociones."""
+    hoy = date.today()
+    fecha_limite_vencimiento = hoy + timedelta(days=30)
+    
+    # 1. Resumen general
     resumen = {
         'total_clientes': Cliente.objects.count(),
         'total_ventas': Venta.objects.count(),
         'total_productos': Producto.objects.count(),
-        'promociones_activas': Promocion.objects.filter(fecha_fin__gte=date.today()).count(),
+        'promociones_activas': Promocion.objects.filter(fecha_fin__gte=hoy).count(),
+        'ventas_total_monto': Venta.objects.aggregate(total=Sum('total'))['total'] or 0,
     }
 
+    # 2. Últimas compras (para historial)
     ultimas_ventas = (
         Venta.objects
-        .select_related('cliente')
+        .select_related('cliente__user') # Accedemos al usuario a través del cliente
         .prefetch_related('detalles__producto')
         .order_by('-fecha_venta')[:5]
     )
+    
+    # 3. Productos más vendidos (Top 5)
+    productos_mas_vendidos = (
+        DetalleVenta.objects
+        .values('producto__nombre') # Agrupar por nombre de producto
+        .annotate(total_vendido=Sum('cantidad')) # Sumar la cantidad vendida
+        .order_by('-total_vendido')[:5]
+    )
+
+    # 4. Productos por vencer (en los próximos 30 días)
+    productos_por_vencer = Producto.objects.filter(
+        fecha_vencimiento__lte=fecha_limite_vencimiento,
+        fecha_vencimiento__gte=hoy, # Solo los que vencen a partir de hoy
+        stock__gt=0 # Solo si tienen stock
+    ).order_by('fecha_vencimiento')
+
+    # 5. TODAS las promociones (para listado y edición)
+    todas_promociones = Promocion.objects.all().order_by('-fecha_inicio')
 
     context = {
         'resumen': resumen,
         'ultimas_ventas': ultimas_ventas,
+        'productos_mas_vendidos': productos_mas_vendidos,
+        'productos_por_vencer': productos_por_vencer,
+        'todas_promociones': todas_promociones, # Se añade el listado completo
     }
 
     return render(request, 'gestion/marketing_dashboard.html', context)
 
-# ------------------------------------------------------------------------
-# CREAR PROMOCIÓN (ADMINISTRADOR DE MARKETING)
-# ------------------------------------------------------------------------
 
 @login_required
 def crear_promocion(request):
-    """Permite al administrador de marketing crear nuevas promociones."""
+    """Permite al administrador de marketing crear nuevas promociones usando el PromocionForm."""
+    
     if request.method == 'POST':
-        nombre = request.POST.get('nombre')
-        descripcion = request.POST.get('descripcion')
-        descuento = request.POST.get('descuento')
-        fecha_inicio = request.POST.get('fecha_inicio')
-        fecha_fin = request.POST.get('fecha_fin')
-        productos_ids = request.POST.getlist('productos')  # IDs de productos seleccionados
+        form = PromocionForm(request.POST) 
+        
+        if form.is_valid():
+            promocion = form.save() 
+            messages.success(request, f"Promoción '{promocion.nombre}' creada exitosamente.")
+            return redirect('marketing_dashboard')
+        else:
+            messages.error(request, "Error al crear la promoción. Revisa los campos marcados y la fecha.")
+    else:
+        form = PromocionForm() 
 
-        if not (nombre and descuento and fecha_inicio and fecha_fin):
-            messages.error(request, "Todos los campos obligatorios deben completarse.")
-            return redirect('crear_promocion')
+    # Rendeza la plantilla con el formulario (vacío o con errores)
+    productos = Producto.objects.all() 
+    context = {'form': form, 'productos': productos, 'modo': 'Crear'}
+    return render(request, 'gestion/crear_promocion.html', context)
 
-        try:
-            descuento = float(descuento)
-            if descuento <= 0 or descuento > 100:
-                raise ValueError
-        except ValueError:
-            messages.error(request, "El descuento debe ser un número válido entre 1 y 100.")
-            return redirect('crear_promocion')
 
-        promocion = Promocion.objects.create(
-            nombre=nombre,
-            descripcion=descripcion,
-            descuento=descuento,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_fin
-        )
-        promocion.productos.set(productos_ids)
-        promocion.save()
+@login_required
+def editar_promocion(request, pk):
+    """Permite al administrador de marketing editar una promoción existente."""
+    promocion = get_object_or_404(Promocion, pk=pk)
 
-        messages.success(request, f"Promoción '{nombre}' creada exitosamente.")
-        return redirect('marketing_dashboard')
+    if request.method == 'POST':
+        form = PromocionForm(request.POST, instance=promocion)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Promoción '{promocion.nombre}' actualizada exitosamente.")
+            return redirect('marketing_dashboard')
+        else:
+            messages.error(request, "Error al actualizar la promoción. Revisa los campos marcados.")
+    else:
+        form = PromocionForm(instance=promocion)
 
     productos = Producto.objects.all()
-    context = {'productos': productos}
+    context = {'form': form, 'productos': productos, 'promocion': promocion, 'modo': 'Editar'}
+    # Se reutiliza la plantilla de creación para la edición
     return render(request, 'gestion/crear_promocion.html', context)
+
+
+@login_required
+def logout_view(request):
+    logout(request)
+    messages.info(request, "Has cerrado sesión correctamente.")
+    return redirect('inicio')

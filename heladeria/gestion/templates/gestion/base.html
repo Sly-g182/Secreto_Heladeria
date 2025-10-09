@@ -64,7 +64,7 @@
                     <a class="btn btn-outline-light me-2" href="{% url 'historial_pedidos' %}">Historial</a>
 
                     <span class="navbar-text me-3 text-white">
-                        Hola, **{{ user.username }}**
+                        {{ user.username }}
                     </span>
                     
                     <form method="post" action="{% url 'logout' %}" class="d-flex">
