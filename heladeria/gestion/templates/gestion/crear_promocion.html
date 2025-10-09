@@ -1,0 +1,120 @@
+{% extends "gestion/base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Crear Promoción{% endblock title %}
+
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'marketing_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Crear Promoción</li>
+                </ol>
+            </nav>
+            <h1 class="mb-4">Crear Nueva Promoción</h1>
+            
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.nombre.id_for_label }}" class="form-label">Nombre</label>
+                            {% render_field form.nombre class="form-control" %}
+                            {% for error in form.nombre.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.descripcion.id_for_label }}" class="form-label">Descripción</label>
+                            {% render_field form.descripcion class="form-control" %}
+                            {% for error in form.descripcion.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.tipo.id_for_label }}" class="form-label">Tipo de Descuento</label>
+                                {% render_field form.tipo class="form-select" %}
+                                {% for error in form.tipo.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.valor_descuento.id_for_label }}" class="form-label">Valor (ej. 10 para 10% o 5000 para $5000)</label>
+                                {% render_field form.valor_descuento class="form-control" %}
+                                {% for error in form.valor_descuento.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.fecha_inicio.id_for_label }}" class="form-label">Fecha de Inicio</label>
+                                {% render_field form.fecha_inicio class="form-control" %}
+                                {% for error in form.fecha_inicio.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.fecha_fin.id_for_label }}" class="form-label">Fecha de Fin</label>
+                                {% render_field form.fecha_fin class="form-control" %}
+                                {% for error in form.fecha_fin.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Aplicar a Productos Específicos:</label>
+                            {{ form.productos }}
+                            <div class="form-text">Si no selecciona ninguno, la promoción aplicará a toda la tienda.</div>
+                            {% for error in form.productos.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-check mb-4">
+                            {% render_field form.activa class="form-check-input" %}
+                            <label class="form-check-label" for="{{ form.activa.id_for_label }}">
+                                Activar Promoción (Marcar para que esté vigente)
+                            </label>
+                            {% for error in form.activa.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">Guardar Promoción</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="mt-5">
+                <h4>Promociones Activas (Referencia Rápida)</h4>
+                {% if promociones_activas %}
+                    <ul class="list-group">
+                        {% for promo in promociones_activas %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-success">
+                                <div>
+                                    <strong>{{ promo.nombre }}</strong> ({{ promo.get_tipo_display }})
+                                </div>
+                                <span class="badge bg-primary rounded-pill">
+                                    Finaliza: {{ promo.fecha_fin|date:"d/m/Y" }}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No hay promociones activas en este momento.</p>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock content %}

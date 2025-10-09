@@ -1,14 +1,10 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1"> 
-    <title>Reporte de Clientes</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="container mt-4">
+{% extends "gestion/base.html" %}
 
-    <h2 class="text-center mb-4">Reporte de Clientes</h2>
+{% block title %}Reporte de Clientes{% endblock title %}
+
+{% block content %}
+<div class="container my-5">
+    <h1 class="text-center mb-4">Listado de Clientes</h1>
 
     <div class="table-responsive">
         <table class="table table-striped table-hover">
@@ -29,12 +25,22 @@
                 <tr>
                     <td>{{ cliente.id }}</td>
                     <td>{{ cliente.nombre }}</td>
-                    <td>{{ cliente.rut }}</td>
-                    <td>{{ cliente.telefono }}</td>
+                    <td>{{ cliente.rut|default:"N/A" }}</td> 
+                    <td>{{ cliente.telefono|default:"N/A" }}</td>
                     <td>{{ cliente.correo }}</td>
-                    <td>{{ cliente.direccion }}</td>
-                    <td>{{ cliente.fecha_registro|date:"d/m/Y" }}</td>
-                    <td>{{ cliente.ultima_compra|date:"d/m/Y" }}</td>
+                    <td>{{ cliente.direccion|default:"N/A" }}</td>
+                    
+                    {# 🚨 AJUSTE: Muestra fecha Y hora del registro (date_joined es DateTime) #}
+                    <td>{{ cliente.fecha_registro|default:"N/A"|date:"d/m/Y H:i" }}</td> 
+                    
+                    {# 🚨 AJUSTE: Muestra fecha Y hora de la última compra (fecha_venta es DateTime) #}
+                    <td>
+                        {% if cliente.ultima_compra %}
+                            {{ cliente.ultima_compra|date:"d/m/Y H:i" }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
@@ -46,7 +52,5 @@
             </tbody>
         </table>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock content %}

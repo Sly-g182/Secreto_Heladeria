@@ -1,0 +1,82 @@
+{% extends "gestion/base.html" %}
+
+{% block title %}Mi Carrito de Compras{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4 text-center text-primary">Tu Pedido Actual 🛒</h1>
+    
+    {% if productos %}
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Ítems Seleccionados</h5>
+                    
+                    <ul class="list-group list-group-flush">
+                        {% for item in productos %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            
+                            <div>
+                                <h6 class="mb-0 text-capitalize">{{ item.nombre }}</h6>
+                                <small class="text-muted">Precio unitario: ${{ item.precio_unitario|floatformat:0 }}</small>
+                            </div>
+
+                            <div class="text-end">
+                                <span class="badge bg-secondary me-3">{{ item.cantidad }} ud.</span>
+                                
+                                <span class="fw-bold me-3 text-success">
+                                    Total: ${{ item.subtotal|floatformat:0 }}
+                                </span>
+                                
+                                <form action="{% url 'quitar_de_carrito' item.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger py-0 px-2" 
+                                            title="Quitar ítem">
+                                        &times;
+                                    </button>
+                                </form>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mt-4 mt-lg-0">
+            <div class="card shadow-sm border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">Resumen del Pedido</h5>
+                    
+                    <div class="d-flex justify-content-between my-3 border-top pt-3">
+                        <span class="fs-5 fw-bold">Total a Pagar:</span>
+                        <span class="fs-5 fw-bold text-danger">${{ total_general|floatformat:0 }}</span>
+                    </div>
+
+                    <a href="{% url 'finalizar_orden' %}" class="btn btn-success w-100 btn-lg mt-3">
+                        Finalizar Pedido (Pagar)
+                    </a>
+                    
+                    <a href="{% url 'producto_listado' %}" class="btn btn-outline-secondary w-100 mt-2">
+                        Seguir Comprando
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    
+    <div class="alert alert-info text-center mt-5 p-5 border shadow">
+        <p class="lead mb-4">Tu carrito está vacío. ¡Añade algunos sabores secretos!</p>
+        <a href="{% url 'producto_listado' %}" class="btn btn-primary btn-lg">
+            Ver Productos
+        </a>
+    </div>
+    
+    {% endif %}
+
+</div>
+{% endblock %}

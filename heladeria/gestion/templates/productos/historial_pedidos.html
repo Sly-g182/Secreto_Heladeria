@@ -1,0 +1,71 @@
+{% extends "gestion/base.html" %}
+
+{% block title %}Mi Historial de Pedidos{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4 text-center text-primary">📜 Historial de Pedidos</h1>
+
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if pedidos %}
+        {% for pedido in pedidos %}
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    Pedido #{{ pedido.id }} 
+                    <small class="text-muted">({{ pedido.fecha_venta|date:"d M Y - H:i" }})</small>
+                </h5>
+                <span class="badge bg-success fs-6">
+                    Total: ${{ pedido.total|floatformat:0 }}
+                </span>
+            </div>
+            
+            <div class="card-body">
+                <h6 class="border-bottom pb-2 mb-3 text-secondary">Detalles de la Orden:</h6>
+                
+                <ul class="list-group list-group-flush">
+                    {% for detalle in pedido.detalles.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div class="col-8">
+                            <span class="fw-bold text-capitalize">{{ detalle.producto.nombre }}</span>
+                            <small class="text-muted d-block">
+                                ${{ detalle.precio_unitario|floatformat:0 }} c/u
+                            </small>
+                        </div>
+
+                        <div class="col-4 text-end">
+                            <span class="me-3">{{ detalle.cantidad }} ud.</span>
+                            <span class="fw-bold">${{ detalle.subtotal|floatformat:0 }}</span>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <p class="text-end mt-3 mb-0 fw-bold pt-2 border-top">
+                    Total Pagado: ${{ pedido.total|floatformat:0 }}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+
+    {% else %}
+    <div class="alert alert-info text-center mt-5 p-5 border shadow">
+        <p class="lead mb-4">Aún no has realizado ningún pedido. ¡Es hora de probar nuestros sabores!</p>
+        <a href="{% url 'producto_listado' %}" class="btn btn-primary btn-lg">
+            Ir a la Tienda
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

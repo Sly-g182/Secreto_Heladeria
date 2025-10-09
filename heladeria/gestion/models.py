@@ -1,7 +1,12 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import F 
+from django.contrib.auth.models import User 
 
+# ========================================================================
+# MODELOS BASE (Categoría, Producto, Promoción)
+# ========================================================================
 
 class Categoria(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
@@ -30,63 +35,129 @@ class Producto(models.Model):
         return False
 
 
-class Cliente(models.Model):
-    nombre = models.CharField(max_length=100)
-    correo = models.EmailField(unique=True)
-    telefono = models.CharField(max_length=20, blank=True, null=True)
-    direccion = models.CharField(max_length=200, blank=True, null=True)
-
-    def __str__(self):
-        return self.nombre
-
-
 class Promocion(models.Model):
+    # Opciones para el tipo de promoción
+    TIPO_CHOICES = [
+        ('PORCENTAJE', 'Porcentaje (%)'),
+        ('VALOR_FIJO', 'Valor Fijo ($)'),
+        ('2X1', '2x1 (Llevar 2, Pagar 1)'), # Opcional: puedes añadir lógicas más complejas
+    ]
+    
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True, null=True)
-    descuento = models.DecimalField(max_digits=5, decimal_places=2, help_text="Porcentaje de descuento (ej: 10.00)")
+    
+    # 🚨 CAMPO CORREGIDO: TIPO (Requerido por PromocionForm)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, help_text="Tipo de descuento aplicado.")
+    
+    # 🚨 CAMPO CORREGIDO: VALOR_DESCUENTO (Requerido por PromocionForm)
+    valor_descuento = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        blank=True, null=True, 
+        help_text="El valor del descuento (ej: 10 para 10% o 5000 para $5000)"
+    )
+    
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField()
     productos = models.ManyToManyField(Producto, blank=True, related_name="promociones")
+    
+    # 🚨 CAMPO CORREGIDO: ACTIVA (Requerido por PromocionForm)
+    activa = models.BooleanField(default=True, help_text="Marcar para que la promoción esté disponible.")
 
     def __str__(self):
         return self.nombre
 
     @property
-    def activa(self):
-        """Devuelve True si la promoción está vigente"""
+    def es_vigente(self):
+        """Devuelve True si la promoción está activa y dentro del rango de fechas"""
         hoy = timezone.now().date()
-        return self.fecha_inicio <= hoy <= self.fecha_fin
+        return self.activa and (self.fecha_inicio <= hoy <= self.fecha_fin)
 
+
+# ========================================================================
+# MODELO CLIENTE (¡CORRECCIÓN CRÍTICA APLICADA!)
+# ========================================================================
+
+class Cliente(models.Model):
+    """
+    Representa el perfil extendido del cliente y se vincula 1:1 con el usuario de Django (User).
+    """
+    user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True) 
+    
+    telefono = models.CharField(max_length=20, blank=True, null=True)
+    direccion = models.CharField(max_length=200, blank=True, null=True)
+    rut = models.CharField(max_length=15, blank=True, null=True) 
+
+    @property
+    def correo(self):
+        """Acceso al email del usuario de Django."""
+        return self.user.email 
+    
+    @property
+    def nombre(self):
+        """Acceso al nombre y apellido del usuario de Django."""
+        if self.user.first_name and self.user.last_name:
+            return f"{self.user.first_name} {self.user.last_name}"
+        return self.user.username
+
+    def __str__(self):
+        return self.nombre
+
+
+# ========================================================================
+# MODELOS DE VENTA (Venta y DetalleVenta)
+# ========================================================================
 
 class Venta(models.Model):
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name="ventas")
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, related_name="ventas") 
     fecha_venta = models.DateTimeField(auto_now_add=True)
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
-        return f"Venta #{self.id} - {self.cliente.nombre}"
+        return f"Venta #{self.id} - {self.cliente.nombre if self.cliente else 'Cliente Eliminado'}"
 
     def calcular_total(self):
-        total = sum(detalle.subtotal for detalle in self.detalles.all())
-        self.total = total
+        """Recalcula el total de la venta sumando los subtotales de todos sus detalles."""
+        from django.db.models import Sum
+        suma = self.detalles.aggregate(total_suma=Sum('subtotal'))['total_suma']
+        self.total = suma if suma is not None else 0.00
         self.save()
 
 
 class DetalleVenta(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="detalles")
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT) 
     cantidad = models.PositiveIntegerField()
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, editable=False) # Precio histórico
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
 
+    class Meta:
+        verbose_name = "Detalle de Venta"
+        verbose_name_plural = "Detalles de Venta"
+        
     def __str__(self):
-        return f"{self.producto.nombre} x {self.cantidad}"
+        return f"{self.producto.nombre} x {self.cantidad} en Venta #{self.venta.id}"
 
     def save(self, *args, **kwargs):
-        """Calcula subtotal automático"""
-        self.subtotal = self.producto.precio * self.cantidad
+        """
+        Calcula subtotal, guarda el precio unitario, actualiza el stock con F-expressions
+        y recalcula el total de la Venta.
+        """
+        
+        # Si es un objeto nuevo (no tiene PK), guarda el precio actual o de la sesión (idealmente)
+        if not self.pk: 
+            # Si el precio_unitario no fue asignado por la lógica de Promoción en views.py, 
+            # usa el precio base del producto.
+            if not self.precio_unitario:
+                    self.precio_unitario = self.producto.precio
+        
+        # 1. Calcula subtotal
+        self.subtotal = self.precio_unitario * self.cantidad
+        
+        # 2. Guarda el detalle
         super().save(*args, **kwargs)
-        # Actualiza stock del producto
-        self.producto.stock -= self.cantidad
-        self.producto.save()
-        # Recalcula total de la venta
+        
+        # 3. CRÍTICO: Actualización de stock con F-expressions
+        Producto.objects.filter(pk=self.producto_id).update(stock=F('stock') - self.cantidad)
+        
+        # 4. Llama al cálculo del total de la Venta (después del detalle)
         self.venta.calcular_total()

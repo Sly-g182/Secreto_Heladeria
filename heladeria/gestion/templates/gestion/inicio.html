@@ -1,0 +1,86 @@
+{% extends "gestion/base.html" %}
+
+{% block title %}Inicio | Secreto Heladería{% endblock title %}
+
+{% block content %}
+<div class="container my-5">
+
+    <header class="p-5 mb-5 bg-primary text-white rounded-3 shadow">
+        <div class="container-fluid py-5 text-center">
+            <h1 class="display-3 fw-bolder mb-3">Secreto Heladería 🍦</h1>
+            <p class="fs-4 mb-0">
+                La excelencia artesanal en helados, desde el corazón de La Serena.
+            </p>
+        </div>
+    </header>
+
+    <div class="p-5 mb-4 bg-light border-start border-5 border-primary rounded-3 shadow-sm">
+        <h2 class="text-primary fw-bold">¿Quiénes Somos?</h2>
+        <hr>
+        <div class="row">
+            <div class="col-md-8">
+                <p>
+                    Somos **Sociedad Gastronómica Vista Hermosa**, conocidos cariñosamente como **Secreto Heladería**. Nacimos en La Serena con la misión de transformar ingredientes frescos y de alta calidad en experiencias de sabor inolvidables.
+                </p>
+                <p>
+                    Nos dedicamos a mantener un alto **estándar de calidad artesanal** en cada proceso, garantizando que el crecimiento de nuestra marca no comprometa la esencia de nuestro producto.
+                </p>
+            </div>
+            <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                <i class="fas fa-hand-holding-heart fa-4x text-muted"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-5 mb-4 bg-light border-start border-5 border-success rounded-3 shadow-sm">
+        <h2 class="text-success fw-bold">Nuestra Oferta de Sabores</h2>
+        <hr>
+        <div class="row">
+            <div class="col-md-8">
+                <p>
+                    Nuestra carta se centra en lo artesanal y lo fresco, ofreciendo variedad para todos los gustos, incluso en meses de baja demanda.
+                </p>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-ice-cream text-success me-2"></i> **Helados Premium:** Sabores exclusivos y de temporada.</li>
+                    <li class="mb-2"><i class="fas fa-lemon text-success me-2"></i> **Sorbettes:** Opciones veganas a base de fruta fresca.</li>
+                    <li class="mb-2"><i class="fas fa-mug-hot text-success me-2"></i> **Diversificación:** También ofrecemos opciones de **cafetería y pastelería** para disfrutar todo el año.</li>
+                </ul>
+            </div>
+            <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                <i class="fas fa-coffee fa-4x text-muted"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-5 mb-5 bg-light border-start border-5 border-warning rounded-3 shadow-sm">
+        <h2 class="text-warning fw-bold">Dónde Encontrarnos</h2>
+        <hr>
+        <div class="row">
+            <div class="col-md-8">
+                <p>
+                    Mejora tu día visitando nuestro local. Trabajamos constantemente para **aumentar la visibilidad de nuestro local** y mejorar la señalética para que nos encuentres fácilmente.
+                </p>
+                <p class="fw-bold fs-5 mt-3">
+                    📍 Dirección Principal:
+                </p>
+                <p class="fs-6">
+                    **Avenida Francisco de Aguirre 450, La Serena.**
+                </p>
+                <p>
+                    <a href="https://maps.app.goo.gl/" target="_blank" class="btn btn-sm btn-outline-dark mt-2">
+                        Ver en Mapa <i class="fas fa-external-link-alt"></i>
+                    </a>
+                </p>
+            </div>
+            <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                <i class="fas fa-location-arrow fa-4x text-muted"></i>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock content %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+{% endblock extra_css %}
