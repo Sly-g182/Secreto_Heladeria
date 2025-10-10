@@ -1,0 +1,112 @@
+[
+    {
+        "model": "auth.group",
+        "pk": 1,
+        "fields": {
+            "name": "Marketing"
+        }
+    },
+    {
+        "model": "auth.group",
+        "pk": 2,
+        "fields": {
+            "name": "Cliente"
+        }
+    },
+    {
+        "model": "auth.user",
+        "pk": 1,
+        "fields": {
+            "username": "admin_marketing",
+            "password": "pbkdf2_sha256$260000$H3m1pP8r6C7J$0xD8l+q7r0v3yM0jYp/JT/d/9p0f57xjF3tVygkM+2g=",
+            "is_superuser": false,
+            "is_staff": true,
+            "is_active": true,
+            "email": "marketing@gmail.com",
+            "groups": [1],
+            "user_permissions": []
+        }
+    },
+    {
+        "model": "auth.user",
+        "pk": 2,
+        "fields": {
+            "username": "Pedro",
+            "password": "pbkdf2_sha256$260000$H3m1pP8r6C7J$0xD8l+q7r0v3yM0jYp/JT/d/9p0f57xjF3tVygkM+2g=",
+            "is_superuser": false,
+            "is_staff": false,
+            "is_active": true,
+            "email": "pedro.21g@gmail.com",
+            "groups": [2],
+            "user_permissions": []
+        }
+    },
+    {
+        "model": "gestion.categoria",
+        "pk": 1,
+        "fields": {
+            "nombre": "Helado",
+            "descripcion": "Diferentes tipos de helado"
+        }
+    },
+    {
+        "model": "gestion.categoria",
+        "pk": 2,
+        "fields": {
+            "nombre": "Pastel",
+            "descripcion": "Variedad de pasteles"
+        }
+    },
+    {
+        "model": "gestion.producto",
+        "pk": 1,
+        "fields": {
+            "nombre": "Helado Vainilla",
+            "descripcion": "Helado clásico de vainilla",
+            "categoria": 1,
+            "precio": 2000,
+            "stock": 50,
+            "fecha_vencimiento": "2025-12-31"
+        }
+    },
+    {
+        "model": "gestion.producto",
+        "pk": 2,
+        "fields": {
+            "nombre": "Pastel Chocolate",
+            "descripcion": "Pastel de chocolate con cobertura",
+            "categoria": 2,
+            "precio": 5000,
+            "stock": 20,
+            "fecha_vencimiento": "2025-11-30"
+        }
+    },
+    {
+        "model": "gestion.promocion",
+        "pk": 1,
+        "fields": {
+            "nombre": "Promo Verano",
+            "descripcion": "15% de descuento en helados",
+            "tipo": "PORCENTAJE",
+            "valor_descuento": 15,
+            "fecha_inicio": "2025-10-10",
+            "fecha_fin": "2025-12-31",
+            "activa": true,
+            "productos": [1]
+        }
+    },
+    {
+        "model": "gestion.promocion",
+        "pk": 2,
+        "fields": {
+            "nombre": "Promo Chocolate",
+            "descripcion": "10% de descuento en pasteles",
+            "tipo": "PORCENTAJE",
+            "valor_descuento": 10,
+            "fecha_inicio": "2025-10-15",
+            "fecha_fin": "2025-11-30",
+            "activa": true,
+            "productos": [2]
+        }
+    }
+]

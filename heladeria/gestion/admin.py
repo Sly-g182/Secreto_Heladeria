@@ -1,30 +1,44 @@
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
-# Importa todos los modelos para registrarlos
-from .models import Categoria, Producto, Promocion, Cliente, Venta, DetalleVenta 
+from django.core.exceptions import ValidationError
+from .models import Categoria, Producto, Promocion, Cliente, Venta, DetalleVenta
 
 # =================================================================
-# PROMOCION ADMIN
+# INLINE DE PRODUCTOS PARA PROMOCION
 # =================================================================
+class ProductoInline(admin.TabularInline):
+    model = Promocion.productos.through  # tabla intermedia many-to-many
+    extra = 1
+    verbose_name = "Producto en promoción"
+    verbose_name_plural = "Productos en promoción"
 
+# =================================================================
+# ACCIÓN PERSONALIZADA
+# =================================================================
+def activar_promociones(modeladmin, request, queryset):
+    updated = queryset.update(activa=True)
+    modeladmin.message_user(request, f"{updated} promoción(es) activada(s).")
+activar_promociones.short_description = "Activar promociones seleccionadas"
+
+# =================================================================
+# ADMIN DE PROMOCION
+# =================================================================
 @admin.register(Promocion)
 class PromocionAdmin(admin.ModelAdmin):
-    # ¡LISTA DE PANTALLA CORREGIDA! Usamos 'tipo', 'valor_descuento' y los campos personalizados.
     list_display = ('nombre', 'tipo', 'valor_descuento', 'rango_fechas', 'es_vigente_status', 'num_productos')
     list_filter = ('activa', 'tipo', 'fecha_inicio', 'fecha_fin')
     search_fields = ('nombre', 'descripcion')
     date_hierarchy = 'fecha_inicio'
-    filter_horizontal = ('productos',) # Mejora la interfaz para seleccionar productos
-    
-    # Campo personalizado para mostrar las fechas
+    filter_horizontal = ('productos',)
+    inlines = [ProductoInline]
+    actions = [activar_promociones]
+
     def rango_fechas(self, obj):
         return f"{obj.fecha_inicio.strftime('%d/%m/%y')} a {obj.fecha_fin.strftime('%d/%m/%y')}"
     rango_fechas.short_description = "Vigencia"
 
-    # Campo personalizado para mostrar si es vigente con colores
     def es_vigente_status(self, obj):
-        # Utilizamos la propiedad 'es_vigente' que definimos en models.py
         if obj.es_vigente:
             return format_html('<span style="color: green; font-weight: bold;">ACTIVA</span>')
         elif obj.fecha_fin < timezone.now().date():
@@ -33,21 +47,41 @@ class PromocionAdmin(admin.ModelAdmin):
             return format_html('<span style="color: orange;">INACTIVA (Manual)</span>')
         else:
             return format_html('<span style="color: blue;">PRÓXIMA</span>')
-
-    es_vigente_status.boolean = False
     es_vigente_status.short_description = 'Estado'
 
-    # Contador de productos relacionados
     def num_productos(self, obj):
-        # Retorna el conteo de productos a los que aplica
         return obj.productos.count() if obj.productos.exists() else "Global/Todos"
     num_productos.short_description = 'Aplica a'
 
+    def save_model(self, request, obj, form, change):
+        if obj.fecha_fin < obj.fecha_inicio:
+            raise ValidationError("La fecha fin no puede ser anterior a la fecha inicio.")
+        super().save_model(request, obj, form, change)
+
+    # ===========================
+    # Permisos correctos para superuser y Marketing
+    # ===========================
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs
+        if request.user.groups.filter(name='Marketing').exists():
+            return qs
+        return qs.none()
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser or request.user.groups.filter(name='Marketing').exists()
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name='Marketing').exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name='Marketing').exists()
+
 
 # =================================================================
-# PRODUCTO ADMIN
+# MODELOS GENERALES
 # =================================================================
-
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'categoria', 'precio', 'stock', 'fecha_vencimiento_format', 'es_por_vencer')
@@ -55,24 +89,17 @@ class ProductoAdmin(admin.ModelAdmin):
     search_fields = ('nombre', 'descripcion')
     date_hierarchy = 'fecha_vencimiento'
     ordering = ('categoria__nombre', 'nombre')
-    list_editable = ('precio', 'stock') # Permite editar precio y stock desde la lista
+    list_editable = ('precio', 'stock')
 
     def fecha_vencimiento_format(self, obj):
         return obj.fecha_vencimiento.strftime('%d/%m/%Y') if obj.fecha_vencimiento else "-"
     fecha_vencimiento_format.short_description = "Vencimiento"
 
-    # Indicador de alerta de vencimiento
     def es_por_vencer(self, obj):
         if obj.esta_por_vencer:
              return format_html('<span style="color: red; font-weight: bold;">¡PRONTO!</span>')
         return format_html('<span style="color: green;">OK</span>')
     es_por_vencer.short_description = 'Alerta Vencimiento'
-    es_por_vencer.boolean = False
-
-
-# =================================================================
-# CATEGORIA, CLIENTE, VENTA, DETALLE VENTA ADMIN
-# =================================================================
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
@@ -90,26 +117,32 @@ class ClienteAdmin(admin.ModelAdmin):
     num_ventas.short_description = 'N° Ventas'
 
 
+# =================================================================
+# INLINE DETALLE VENTA
+# =================================================================
 class DetalleVentaInline(admin.TabularInline):
     model = DetalleVenta
-    extra = 0
-    # No se puede editar un detalle de venta histórico
-    readonly_fields = ('producto', 'cantidad', 'precio_unitario', 'subtotal')
-    can_delete = False
+    extra = 1  # permite añadir nuevas filas
+    readonly_fields = ('subtotal', 'precio_unitario')
+    # editable fields: producto y cantidad
+    fields = ('producto', 'cantidad', 'precio_unitario', 'subtotal')
 
+
+# =================================================================
+# ADMIN VENTA CON INLINE
+# =================================================================
 @admin.register(Venta)
 class VentaAdmin(admin.ModelAdmin):
     list_display = ('id', 'cliente_nombre', 'fecha_venta', 'total_formateado')
     list_filter = ('fecha_venta',)
     search_fields = ('cliente__user__username', 'id')
     inlines = [DetalleVentaInline]
-    # No se permite cambiar el cliente, el total ni la fecha de una venta finalizada
-    readonly_fields = ('cliente', 'total', 'fecha_venta')
+    readonly_fields = ('total', 'fecha_venta')
 
     def cliente_nombre(self, obj):
         return obj.cliente.nombre if obj.cliente else "N/A"
     cliente_nombre.short_description = 'Cliente'
     
     def total_formateado(self, obj):
-        return f"${obj.total:,.2f}" # Formato de moneda
+        return f"${obj.total:,.2f}"
     total_formateado.short_description = 'Total Venta'
