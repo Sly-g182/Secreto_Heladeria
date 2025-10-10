@@ -3,11 +3,9 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import F 
 from django.contrib.auth.models import User 
-from django.core.exceptions import ValidationError # 🚨 ¡NUEVA IMPORTACIÓN NECESARIA! 🚨
+from django.core.exceptions import ValidationError 
 
-# ========================================================================
-# MODELOS BASE (Categoría, Producto, Promoción)
-# ========================================================================
+
 
 class Categoria(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
@@ -28,13 +26,13 @@ class Producto(models.Model):
     def __str__(self):
         return self.nombre
     
-    # 🚨 VALIDACIÓN: STOCK NO NEGATIVO 🚨
+    
     def clean(self):
         """Asegura que el stock no sea un valor negativo."""
         if self.stock < 0:
             raise ValidationError({'stock': "El stock de un producto no puede ser un valor negativo."})
         
-        # Llama a la implementación base para otras posibles validaciones
+        
         super().clean()
 
     @property
@@ -46,20 +44,20 @@ class Producto(models.Model):
 
 
 class Promocion(models.Model):
-    # Opciones para el tipo de promoción
+    
     TIPO_CHOICES = [
         ('PORCENTAJE', 'Porcentaje (%)'),
         ('VALOR_FIJO', 'Valor Fijo ($)'),
-        ('2X1', '2x1 (Llevar 2, Pagar 1)'), # Opcional: puedes añadir lógicas más complejas
+        ('2X1', '2x1 (Llevar 2, Pagar 1)'), 
     ]
     
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True, null=True)
     
-    # 🚨 CAMPO CORREGIDO: TIPO (Requerido por PromocionForm)
+    
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, help_text="Tipo de descuento aplicado.")
     
-    # 🚨 CAMPO CORREGIDO: VALOR_DESCUENTO (Requerido por PromocionForm)
+    
     valor_descuento = models.DecimalField(
         max_digits=10, decimal_places=2, 
         blank=True, null=True, 
@@ -70,13 +68,13 @@ class Promocion(models.Model):
     fecha_fin = models.DateField()
     productos = models.ManyToManyField(Producto, blank=True, related_name="promociones")
     
-    # 🚨 CAMPO CORREGIDO: ACTIVA (Requerido por PromocionForm)
+    
     activa = models.BooleanField(default=True, help_text="Marcar para que la promoción esté disponible.")
 
     def __str__(self):
         return self.nombre
     
-    # 🚨 VALIDACIÓN: RANGO DE FECHAS 🚨
+    
     def clean(self):
         """Asegura que la fecha de inicio no sea posterior a la fecha de fin."""
         if self.fecha_inicio and self.fecha_fin and self.fecha_inicio > self.fecha_fin:
@@ -93,9 +91,7 @@ class Promocion(models.Model):
         return self.activa and (self.fecha_inicio <= hoy <= self.fecha_fin)
 
 
-# ========================================================================
-# MODELO CLIENTE (¡CORRECCIÓN CRÍTICA APLICADA!)
-# ========================================================================
+
 
 class Cliente(models.Model):
     """
@@ -123,9 +119,7 @@ class Cliente(models.Model):
         return self.nombre
 
 
-# ========================================================================
-# MODELOS DE VENTA (Venta y DetalleVenta)
-# ========================================================================
+
 
 class Venta(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, related_name="ventas") 
@@ -147,7 +141,7 @@ class DetalleVenta(models.Model):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="detalles")
     producto = models.ForeignKey(Producto, on_delete=models.PROTECT) 
     cantidad = models.PositiveIntegerField()
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, editable=False) # Precio histórico
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, editable=False) 
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
 
     class Meta:
@@ -163,21 +157,15 @@ class DetalleVenta(models.Model):
         y recalcula el total de la Venta.
         """
         
-        # Si es un objeto nuevo (no tiene PK), guarda el precio actual o de la sesión (idealmente)
         if not self.pk: 
-            # Si el precio_unitario no fue asignado por la lógica de Promoción en views.py, 
-            # usa el precio base del producto.
+
             if not self.precio_unitario:
                     self.precio_unitario = self.producto.precio
         
-        # 1. Calcula subtotal
         self.subtotal = self.precio_unitario * self.cantidad
         
-        # 2. Guarda el detalle
         super().save(*args, **kwargs)
         
-        # 3. CRÍTICO: Actualización de stock con F-expressions
         Producto.objects.filter(pk=self.producto_id).update(stock=F('stock') - self.cantidad)
         
-        # 4. Llama al cálculo del total de la Venta (después del detalle)
         self.venta.calcular_total()

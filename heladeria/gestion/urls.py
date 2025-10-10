@@ -2,12 +2,12 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Rutas de Autenticación y Principales
+    
     path('', views.inicio, name='inicio'),
     path('register/', views.register, name='register'),
-    path('logout/', views.logout_view, name='logout'), # Asumiendo que tienes una vista de logout
+    path('logout/', views.logout_view, name='logout'), 
 
-    # Rutas de Cliente (Tienda y Carrito)
+    
     path('tienda/', views.producto_listado, name='producto_listado'),
     path('carrito/', views.ver_carrito, name='ver_carrito'),
     path('carrito/agregar/<int:producto_id>/', views.agregar_a_carrito, name='agregar_a_carrito'),
@@ -15,13 +15,13 @@ urlpatterns = [
     path('ordenar/', views.finalizar_orden, name='finalizar_orden'),
     path('historial/', views.historial_pedidos, name='historial_pedidos'),
 
-    # Rutas de Staff/Administración
+    
     path('reporte/clientes/', views.reporte_clientes, name='reporte_clientes'),
     
-    # Rutas de Marketing (Dashboard y Promociones)
+    
     path('marketing/', views.marketing_dashboard, name='marketing_dashboard'),
     path('marketing/promocion/crear/', views.crear_promocion, name='crear_promocion'),
     
-    # RUTA REQUERIDA PARA LA EDICIÓN:
+    
     path('marketing/promocion/<int:pk>/editar/', views.editar_promocion, name='editar_promocion'), 
 ]

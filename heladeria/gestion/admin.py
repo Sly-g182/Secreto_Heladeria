@@ -4,26 +4,20 @@ from django.utils.html import format_html
 from django.core.exceptions import ValidationError
 from .models import Categoria, Producto, Promocion, Cliente, Venta, DetalleVenta
 
-# =================================================================
-# INLINE DE PRODUCTOS PARA PROMOCION
-# =================================================================
+
 class ProductoInline(admin.TabularInline):
-    model = Promocion.productos.through  # tabla intermedia many-to-many
+    model = Promocion.productos.through  
     extra = 1
     verbose_name = "Producto en promoción"
     verbose_name_plural = "Productos en promoción"
 
-# =================================================================
-# ACCIÓN PERSONALIZADA
-# =================================================================
+
 def activar_promociones(modeladmin, request, queryset):
     updated = queryset.update(activa=True)
     modeladmin.message_user(request, f"{updated} promoción(es) activada(s).")
 activar_promociones.short_description = "Activar promociones seleccionadas"
 
-# =================================================================
-# ADMIN DE PROMOCION
-# =================================================================
+
 @admin.register(Promocion)
 class PromocionAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'tipo', 'valor_descuento', 'rango_fechas', 'es_vigente_status', 'num_productos')
@@ -58,9 +52,7 @@ class PromocionAdmin(admin.ModelAdmin):
             raise ValidationError("La fecha fin no puede ser anterior a la fecha inicio.")
         super().save_model(request, obj, form, change)
 
-    # ===========================
-    # Permisos correctos para superuser y Marketing
-    # ===========================
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
@@ -79,9 +71,7 @@ class PromocionAdmin(admin.ModelAdmin):
         return request.user.is_superuser or request.user.groups.filter(name='Marketing').exists()
 
 
-# =================================================================
-# MODELOS GENERALES
-# =================================================================
+
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'categoria', 'precio', 'stock', 'fecha_vencimiento_format', 'es_por_vencer')
@@ -97,7 +87,7 @@ class ProductoAdmin(admin.ModelAdmin):
 
     def es_por_vencer(self, obj):
         if obj.esta_por_vencer:
-             return format_html('<span style="color: red; font-weight: bold;">¡PRONTO!</span>')
+                return format_html('<span style="color: red; font-weight: bold;">¡PRONTO!</span>')
         return format_html('<span style="color: green;">OK</span>')
     es_por_vencer.short_description = 'Alerta Vencimiento'
 
@@ -117,20 +107,16 @@ class ClienteAdmin(admin.ModelAdmin):
     num_ventas.short_description = 'N° Ventas'
 
 
-# =================================================================
-# INLINE DETALLE VENTA
-# =================================================================
+
 class DetalleVentaInline(admin.TabularInline):
     model = DetalleVenta
-    extra = 1  # permite añadir nuevas filas
+    extra = 1  
     readonly_fields = ('subtotal', 'precio_unitario')
-    # editable fields: producto y cantidad
+    
     fields = ('producto', 'cantidad', 'precio_unitario', 'subtotal')
 
 
-# =================================================================
-# ADMIN VENTA CON INLINE
-# =================================================================
+
 @admin.register(Venta)
 class VentaAdmin(admin.ModelAdmin):
     list_display = ('id', 'cliente_nombre', 'fecha_venta', 'total_formateado')

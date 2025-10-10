@@ -1,22 +1,20 @@
 from django.contrib.auth.forms import UserCreationForm
 from django import forms
 from django.contrib.auth.models import User
-# Asegúrate de que estos modelos existan en gestion/models.py
+
 from .models import Cliente, Promocion, Producto 
 
 
-# -----------------------------------------------
-# FORMULARIO DE REGISTRO
-# -----------------------------------------------
-class ClienteUserCreationForm(UserCreationForm):
-# ... (rest of the class remains the same)
 
-    # Campos de perfil que se mapearán al modelo Cliente
+class ClienteUserCreationForm(UserCreationForm):
+
+
+    
     rut = forms.CharField(max_length=15, required=False, label="RUT/Identificación")
     telefono = forms.CharField(max_length=20, required=False, label="Teléfono")
     direccion = forms.CharField(max_length=200, required=False, label="Dirección")
     
-    # Añadimos first_name y last_name y email 
+    
     first_name = forms.CharField(max_length=150, required=True, label="Nombre")
     last_name = forms.CharField(max_length=150, required=True, label="Apellido")
     email = forms.EmailField(required=True, label="Correo Electrónico")
@@ -32,7 +30,7 @@ class ClienteUserCreationForm(UserCreationForm):
         return email
 
     def save(self, commit=True):
-        # 1. Guarda el objeto User
+    
         user = super().save(commit=False)
         user.email = self.cleaned_data['email'] 
         user.first_name = self.cleaned_data['first_name']
@@ -41,7 +39,7 @@ class ClienteUserCreationForm(UserCreationForm):
         if commit:
             user.save()
             
-            # 2. Crea y guarda el objeto Cliente (el perfil extendido)
+            
             Cliente.objects.create(
                 user=user, 
                 rut=self.cleaned_data.get('rut'), 
@@ -52,11 +50,9 @@ class ClienteUserCreationForm(UserCreationForm):
         return user
 
 
-# -----------------------------------------------
-# FORMULARIO DE CREACIÓN DE PROMOCIONES (Marketing)
-# -----------------------------------------------
+
 class PromocionForm(forms.ModelForm):
-# ... (rest of the class remains the same)
+
     """Formulario para crear y editar promociones."""
     
     productos = forms.ModelMultipleChoiceField(
@@ -94,11 +90,9 @@ class PromocionForm(forms.ModelForm):
         return cleaned_data
         
         
-# -----------------------------------------------
-# FORMULARIO PARA AÑADIR AL CARRITO (Tienda)
-# -----------------------------------------------
+
 class AgregarAlCarritoForm(forms.Form):
-# ... (rest of the class remains the same)
+
     """
     Formulario simple para añadir un producto al carrito.
     """
